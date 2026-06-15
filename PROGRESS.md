@@ -10,8 +10,8 @@
 |---|---|---|
 | Backend | Database, migrations, RLS, Edge Functions | ✅ Done |
 | Frontend | React Native app development | ✅ All 5 phases complete — pushed to GitHub 2026-06-15 |
-| Tester | Bug logging and end-to-end flow testing | After Phase 3 complete |
-| UI | Screen polish, visual design, styling | After Phase 4 complete |
+| Tester | Bug logging and end-to-end flow testing | 🟡 Ready to start |
+| UI | Screen polish, visual design, styling | ✅ Done — 2026-06-15 |
 | Architect | Architecture review after each phase | Ongoing |
 
 ---
@@ -140,6 +140,69 @@ All migrations executed. 13 tables + 3 views live. Seed data loaded (11 location
 - [x] Codebase pushed to GitHub — `https://github.com/tfqnet/reportingAppFrontEnd` · 70 files · 5,890 lines · commit `506a79f` (2026-06-15)
 - [ ] EAS build: iOS `.ipa` — requires Apple credentials (`ascAppId`, `appleTeamId`) in `eas.json`
 - [ ] EAS build: Android `.apk` — requires `google-service-account.json` at `mobile/` root
+
+---
+
+## Tester Progress
+
+### Status: 🟡 Ready to start
+
+- [ ] Auth flow — login as all 3 roles, PIN lock, forgot password
+- [ ] End user — submit Unsafe Action report end-to-end with photos
+- [ ] End user — submit Unsafe Situation report end-to-end with photos
+- [ ] End user — submit Safe Observation report end-to-end with photos
+- [ ] End user — submit on behalf of another user
+- [ ] End user — save draft, kill app, resume draft
+- [ ] End user — offline draft, reconnect and submit
+- [ ] Approver — receive push notification on new report
+- [ ] Approver — approve report with note, verify end user notified
+- [ ] Approver — reject report with reason, verify end user notified
+- [ ] Admin — dashboard stats load correctly (all charts)
+- [ ] Admin — tablet dashboard layout on iPad landscape
+- [ ] Admin — invite new user, assign role
+- [ ] Admin — deactivate user
+- [ ] Admin — add location, department, category via MasterData screen
+- [ ] All roles — report listing filters work correctly
+- [ ] All roles — report detail shows correct approval history timeline
+
+> Demo accounts: `admin@safereport.dev` / `approver@safereport.dev` / `user@safereport.dev` — password `Demo@1234`
+> Log all bugs in `TEST.md` using the template. Next bug ID: **BUG-004**
+
+---
+
+## UI Session Progress
+
+### Status: ✅ Complete (2026-06-15)
+
+- [x] Color system defined and applied across all screens — `COLORS` extended with semantic aliases, zero hardcoded hex values in component/screen files
+- [x] Typography scale (`FONT_SIZE`, `FONT_WEIGHT`) defined and applied — applied to Button, StepBar, EmptyState, Modal, ReportCard, StatCard, LoginScreen, HomeScreen, ReportTypeSelectScreen
+- [x] Spacing (8pt grid, `SPACING`) applied across all screens — `SPACING` constant defined, applied to all polished components and screens
+- [x] `Button` component polished — rounded corners (12px), shadow, correct white text, min height
+- [x] `ReportCard` component polished — status-colored left border via `REPORT_TYPE_COLORS`, improved shadow
+- [x] `StatusBadge` component polished — pill shape with `COLORS.textTertiary` fallback
+- [x] `StatCard` component polished — top accent bar, bold value, improved shadow, overflow hidden
+- [x] `StepBar` component polished — 30px circles with glow on active, green labels on done steps
+- [x] `EmptyState` component polished — icon in circle container, optional CTA button
+- [x] `Loading` component polished — uses `COLORS.accent` (unchanged, was already clean)
+- [x] `Modal` component polished — 24px top radius, close button circle, shadow
+- [x] `LoginScreen` polished — logo circle with SR initials, form title, input background
+- [x] `HomeScreen` polished — role pill, icon action cards with type colors, tips card
+- [x] `ReportTypeSelectScreen` polished — Ionicons replacing emojis, icon circles, improved draft banner
+- [x] `SectionOne–Four` screens polished — hardcoded hex fixed, observer tags use `COLORS.accentLight`, note uses `COLORS.warningLight`
+- [x] `PreviewScreen` polished — `REPORT_TYPE_COLORS` map replaces inline ternary
+- [x] `MyReportsScreen` / `AllReportsScreen` polished — error + chip backgrounds use semantic colors
+- [x] `ReportDetailScreen` polished — tag, rejection box use semantic danger/accent colors
+- [x] `ApprovalQueueScreen` polished — warning banner uses `COLORS.warningLight/Border/Dark`
+- [x] `DashboardScreen` polished — stat card colors reference `COLORS.danger/warning/success`
+- [x] `UserManagementScreen` polished — `ROLE_COLORS` moved to constants, no local hardcoded hex
+- [x] `MasterDataScreen` polished — hardcoded `'#fff'` replaced with `COLORS.white`
+- [x] `ProfileScreen` polished — hardcoded `'#fff'` replaced with `COLORS.white`
+- [x] Icons added across tab bars and screens — Ionicons added to UserNavigator, ApproverNavigator, AdminNavigator tab bars; HomeScreen and ReportTypeSelectScreen use Ionicons in place of emoji
+- [x] `REPORT_TYPE_COLORS` constant added — shared across ReportCard, ReportTypeSelectScreen, PreviewScreen, HomeScreen, DashboardScreen
+- [x] `ROLE_COLORS` constant moved to `constants.ts` — references `COLORS.roleEndUser/Approver/Admin`
+- [ ] Tablet dashboard layout verified on iPad simulator — pending live device/simulator run
+
+> No logic changes made. All styles in `StyleSheet.create`. All colors reference `COLORS` from `constants.ts`.
 
 ---
 
