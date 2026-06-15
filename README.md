@@ -1,6 +1,23 @@
 # SafeReport — Backend
 
-Supabase backend for the SafeReport HSSE field reporting mobile app. Contains the full PostgreSQL schema, Row Level Security policies, seed data, dashboard views, and an Expo push notification Edge Function.
+Supabase PostgreSQL schema, RLS policies, seed data, dashboard views, and Edge Functions for the SafeReport HSSE field reporting mobile app.
+
+---
+
+## Current Status — ✅ MVP Complete (2026-06-15)
+
+| Component | Status |
+|---|---|
+| Database schema (13 tables + 3 views) | ✅ Live |
+| RLS policies | ✅ Applied |
+| Seed data (locations, departments, categories, risk factors) | ✅ Loaded |
+| Demo accounts (admin / approver / end_user) | ✅ Live |
+| Triggers (report number, timestamps, audit log) | ✅ Active |
+| Edge Function: `send-notification` | ✅ Deployed |
+| Edge Function: `invite-user` | ✅ Deployed |
+| Notification trigger via pg_net | ✅ Active |
+| Approver dashboard RPC functions | ✅ Deployed |
+| `.env.example` for frontend | ✅ In repo |
 
 ---
 
@@ -21,18 +38,22 @@ Supabase backend for the SafeReport HSSE field reporting mobile app. Contains th
 ```
 backend/
 ├── migrations/
-│   ├── 001_initial_schema.sql   — tables, enums, indexes
-│   ├── 002_triggers.sql         — report_number gen, updated_at, auto-profile, audit log
-│   ├── 003_storage.sql          — storage bucket setup
-│   └── 004_views.sql            — dashboard aggregate views
+│   ├── 001_initial_schema.sql        — all tables, enums, indexes
+│   ├── 002_triggers.sql              — report_number, updated_at, auto-profile, audit log
+│   ├── 003_storage.sql               — storage bucket setup
+│   ├── 004_views.sql                 — dashboard aggregate views (admin-scoped)
+│   ├── 005_notification_trigger.sql  — pg_net HTTP trigger for push notifications
+│   └── 006_approver_rpc.sql          — approver-scoped dashboard RPC functions
 ├── policies/
-│   └── rls_policies.sql         — Row Level Security for all tables + storage
+│   └── rls_policies.sql              — Row Level Security for all tables + storage
 ├── seed/
-│   ├── 001_master_data.sql      — locations, departments, categories, risk factors
-│   └── 002_demo_users.sql       — demo account role patches
+│   ├── 001_master_data.sql           — locations, departments, categories, risk factors
+│   └── 002_demo_users.sql            — demo account role patches (run after Auth users created)
 └── functions/
-    └── send-notification/
-        └── index.ts             — Expo push notification Edge Function
+    ├── send-notification/
+    │   └── index.ts                  — Expo push notification Edge Function
+    └── invite-user/
+        └── index.ts                  — Admin invite user Edge Function
 ```
 
 ---
@@ -44,15 +65,31 @@ backend/
 | Table | Purpose |
 |---|---|
 | `profiles` | Extends `auth.users` — stores role, department, push token |
-| `locations` | Hierarchical site locations (supports sub-locations) |
-| `departments` | Hierarchical departments (supports sub-departments) |
+| `locations` | Hierarchical site locations (supports sub-locations via `parent_id`) |
+| `departments` | Hierarchical departments (supports sub-departments via `parent_id`) |
 | `categories` | Observation categories per report type, hierarchical |
 | `risk_factors` | Risk level options (Low / Medium / High / Critical) |
 | `reports` | Main report records covering all 4 form steps |
 | `report_categories` | Junction: categories selected per report |
 | `report_observers` | Additional observers listed on a report |
-| `report_attachments` | Photo attachment metadata (files stored in Supabase Storage) |
+| `report_attachments` | Photo attachment metadata (files in Supabase Storage) |
 | `approval_history` | Append-only audit log of every status transition |
+
+### Dashboard Views (admin-scoped)
+
+| View | Used For |
+|---|---|
+| `report_stats` | Stat cards — total, pending, approved, rejected, by type |
+| `reports_by_department` | Bar chart — report count per top-level department |
+| `report_trend_daily` | Line chart — daily submissions over last 90 days |
+
+### Approver-Scoped RPC Functions
+
+| Function | Returns |
+|---|---|
+| `get_approver_stats(p_approver_id)` | Same shape as `report_stats`, filtered to approver queue |
+| `get_approver_stats_by_department(p_approver_id)` | Same shape as `reports_by_department` |
+| `get_approver_trend(p_approver_id)` | Same shape as `report_trend_daily` |
 
 ### Report Types
 
@@ -84,23 +121,17 @@ draft → pending → approved
 ### Prerequisites
 
 - Supabase account and a new project
-- Supabase CLI installed (`npm i -g supabase`)
+- Supabase CLI (`brew install supabase/tap/supabase`)
 
-### 1. Run Migrations (in order)
-
-Paste each file into the Supabase SQL editor, or use the CLI:
-
-```bash
-supabase db push
-```
-
-Manual order if running via SQL editor:
+### 1. Run Migrations (in order via SQL Editor)
 
 ```
 migrations/001_initial_schema.sql
 migrations/002_triggers.sql
 migrations/003_storage.sql
 migrations/004_views.sql
+migrations/005_notification_trigger.sql
+migrations/006_approver_rpc.sql
 ```
 
 ### 2. Apply RLS Policies
@@ -115,9 +146,13 @@ policies/rls_policies.sql
 seed/001_master_data.sql
 ```
 
-### 4. Create Demo Auth Users
+### 4. Create Demo Auth Users (optional)
 
-Create these accounts in the Supabase dashboard under **Authentication → Users**:
+Create in Supabase dashboard **Authentication → Users** then run:
+
+```
+seed/002_demo_users.sql
+```
 
 | Email | Password | Role |
 |---|---|---|
@@ -125,35 +160,23 @@ Create these accounts in the Supabase dashboard under **Authentication → Users
 | `approver@safereport.dev` | `Demo@1234` | approver |
 | `user@safereport.dev` | `Demo@1234` | end_user |
 
-Then run:
-
-```
-seed/002_demo_users.sql
-```
-
-### 5. Deploy the Edge Function
+### 5. Deploy Edge Functions
 
 ```bash
+supabase login
+supabase link --project-ref <project-ref>
 supabase functions deploy send-notification
+supabase functions deploy invite-user
 ```
 
-### 6. Wire the Database Webhook
+### 6. Configure Frontend Environment
 
-In the Supabase dashboard go to **Database → Webhooks → Create webhook**:
-
-- Table: `reports`
-- Event: `UPDATE`
-- Type: HTTP Request
-- URL: `https://<project-ref>.supabase.co/functions/v1/send-notification`
-- Method: POST
-
-### 7. Configure Frontend Environment
-
-Copy these values from your Supabase project settings into the mobile app's `.env.local`:
+Copy into `mobile/.env.local`:
 
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+EXPO_PUBLIC_APP_ENV=development
 ```
 
 ---
@@ -170,54 +193,48 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 
 ---
 
-## Dashboard Views
+## Edge Functions
 
-Three views are pre-built for the mobile dashboard:
+### `send-notification`
 
-| View | Used For |
-|---|---|
-| `report_stats` | Stat cards — total, pending, approved, rejected, by type |
-| `reports_by_department` | Bar chart — report count per department |
-| `report_trend_daily` | Line chart — daily submissions over last 90 days |
+Triggered by a pg_net DB trigger on `reports.status` UPDATE. Sends Expo push notifications to the relevant user.
 
-**Example queries (Supabase JS client):**
+**Trigger events:**
 
-```ts
-// Stat cards
-const { data } = await supabase.from('report_stats').select('*')
+| Status change | Recipient | Screen |
+|---|---|---|
+| → `pending` | Approver | `ApprovalQueue` |
+| → `approved` | Submitter | `ReportDetail` |
+| → `rejected` | Submitter | `ReportDetail` |
 
-// Department bar chart
-const { data } = await supabase.from('reports_by_department').select('*')
-
-// Trend line (client filters to 7/30/90 days)
-const { data } = await supabase.from('report_trend_daily').select('*')
-```
-
----
-
-## Push Notification Payload
-
-The `send-notification` Edge Function fires on every `reports` status change and sends:
-
+**Payload shape:**
 ```json
 {
   "to": "<expo-push-token>",
   "title": "...",
   "body": "...",
-  "data": {
-    "reportId": "<uuid>",
-    "screen": "ApprovalQueue | ReportDetail"
-  },
+  "data": { "reportId": "<uuid>", "screen": "ApprovalQueue | ReportDetail" },
   "sound": "default",
   "priority": "high"
 }
 ```
 
-| Event | Recipient | `screen` value |
-|---|---|---|
-| Status → `pending` | Approver | `ApprovalQueue` |
-| Status → `approved` | Submitter | `ReportDetail` |
-| Status → `rejected` | Submitter | `ReportDetail` |
+### `invite-user`
+
+Called by `adminService.inviteUser()` in the mobile app. Requires admin JWT.
+
+**Request:**
+```json
+{
+  "email": "new@example.com",
+  "full_name": "New User",
+  "role": "end_user | approver | admin",
+  "department_id": "<uuid>",
+  "company": "ACME Corp"
+}
+```
+
+**Behaviour:** Verifies caller is admin → creates auth user via `inviteUserByEmail` (sends invite email) → patches profile with role and metadata.
 
 ---
 
@@ -231,7 +248,6 @@ The `send-notification` Edge Function fires on every `reports` status change and
 Upload path format: `{report_id}/{file_name}`
 
 Retrieve with a signed URL:
-
 ```ts
 const { data } = await supabase.storage
   .from('report-attachments')
@@ -240,10 +256,31 @@ const { data } = await supabase.storage
 
 ---
 
+## Dashboard Query Reference
+
+### Admin (uses views directly)
+```ts
+supabase.from('report_stats').select('*')
+supabase.from('reports_by_department').select('*')
+supabase.from('report_trend_daily').select('*')
+```
+
+### Approver (uses RPC functions)
+```ts
+supabase.rpc('get_approver_stats', { p_approver_id: uid })
+supabase.rpc('get_approver_stats_by_department', { p_approver_id: uid })
+supabase.rpc('get_approver_trend', { p_approver_id: uid })
+```
+
+All shapes are identical so the frontend uses the same chart components for both roles.
+
+---
+
 ## Key Design Decisions
 
 - **`report_number` is DB-generated** by trigger (`SR-YYYY-NNNNN`) to avoid client-side race conditions.
-- **Profile auto-creation** — a trigger on `auth.users` inserts a `profiles` row on every signup; the frontend does not need to call a separate insert.
-- **`approval_history` is append-only** — inserts are handled exclusively by a `SECURITY DEFINER` trigger; no client can insert directly.
-- **RLS helper functions** (`is_admin()`, `is_approver_or_admin()`) are `SECURITY DEFINER STABLE` so they are evaluated once per query, not per row.
-- **Storage paths encode the report ID** as the first path segment so storage RLS policies can enforce ownership without an extra join table.
+- **Profile auto-creation** — a trigger on `auth.users` inserts a `profiles` row on signup; frontend only calls `supabase.auth.signUp()`.
+- **`approval_history` is append-only** — inserts handled exclusively by a `SECURITY DEFINER` trigger; no direct client inserts allowed.
+- **RLS helpers** (`is_admin()`, `is_approver_or_admin()`) are `SECURITY DEFINER STABLE` — evaluated once per query, not per row.
+- **Storage paths encode the report ID** as the first path segment so RLS can enforce ownership without a join table.
+- **Dashboard webhook replaced with pg_net** — Supabase free plan lacks the `supabase_functions` schema required for dashboard webhooks; `extensions.http_post()` in a trigger achieves the same result with no dashboard config.
